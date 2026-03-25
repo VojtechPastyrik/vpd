@@ -1,4 +1,4 @@
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static:nonroot
 ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/vpd /usr/local/bin/
 ENTRYPOINT ["vpd"]
