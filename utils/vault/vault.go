@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/VojtechPastyrik/vpd/pkg/logger"
 )
@@ -71,14 +72,29 @@ func UnsealPod(podName, namespace string, vaultKeys []string, threshold int) {
 		if i >= threshold {
 			break
 		}
+		unsealWithRetry(podName, namespace, key)
+	}
+	WaitForPodReady(podName, namespace)
+}
+
+func unsealWithRetry(podName, namespace, key string) {
+	const maxRetries = 6
+	const retryInterval = 5 * time.Second
+
+	for attempt := range maxRetries {
 		cmd := exec.Command("kubectl", "exec", podName, "-n", namespace, "--", "vault", "operator", "unseal", key)
 		cmd.Env = os.Environ()
 		output, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Fatalf("error unsealing pod %s with key %s: %v\nOutput: %s", podName, key, err, output)
+		if err == nil {
+			return
 		}
+		if strings.Contains(string(output), "not initialized") && attempt < maxRetries-1 {
+			logger.Infof("pod %s not yet initialized, retrying in %s (%d/%d)", podName, retryInterval, attempt+1, maxRetries)
+			time.Sleep(retryInterval)
+			continue
+		}
+		logger.Fatalf("error unsealing pod %s with key %s: %v\nOutput: %s", podName, key, err, output)
 	}
-	WaitForPodReady(podName, namespace)
 }
 
 func WaitForPodReady(pod, namespace string) {
