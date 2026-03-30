@@ -21,8 +21,8 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.40.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.35.2
-	k8s.io/apimachinery v0.35.2
+	k8s.io/api v0.35.3
+	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.1
 	software.sslmate.com/src/go-pkcs12 v0.7.0
 )
