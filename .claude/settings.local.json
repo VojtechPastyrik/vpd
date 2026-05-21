@@ -7,7 +7,9 @@
       "WebFetch(domain:goreleaser.com)",
       "Bash(grep -r \"unseal\\\\|init\" /Users/vojtechpastyrik/GolandProjects/vp-utils/cmd/vault --include=\"*.go\" 2>/dev/null | head -50)",
       "Bash(go mod tidy && go build ./...)",
-      "Bash(go vet ./...)"
+      "Bash(go vet ./...)",
+      "Bash(rtk grep *)",
+      "Bash(rtk ls *)"
     ],
     "deny": [],
     "ask": []
