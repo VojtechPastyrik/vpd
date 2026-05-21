@@ -65,6 +65,7 @@ jobs:
         run: |
           for f in dist/vpd_*.deb; do
             cloudsmith push deb vojtechpastyrik/vpd/debian/bookworm "$f"
+            cloudsmith push deb vojtechpastyrik/vpd/debian/trixie "$f"
             cloudsmith push deb vojtechpastyrik/vpd/ubuntu/noble "$f"
           done
         env:
