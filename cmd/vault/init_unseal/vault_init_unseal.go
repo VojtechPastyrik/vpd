@@ -34,7 +34,6 @@ The flavor is detected from pod labels unless --flavor is set.`,
 
 func init() {
 	parent_cmd.Cmd.AddCommand(Cmd)
-	Cmd.MarkFlagRequired("path")
 	Cmd.Flags().StringVarP(
 		&FlagPath,
 		"path",
@@ -42,7 +41,7 @@ func init() {
 		"",
 		"Path to save vault keys",
 	)
-	Cmd.MarkFlagRequired("namespace")
+	Cmd.MarkFlagRequired("path")
 	Cmd.Flags().StringVarP(
 		&FlagNamespace,
 		"namespace",
