@@ -19,10 +19,12 @@ var FlagKeyThreshold int
 
 var Cmd = &cobra.Command{
 	Use:   "init-unseal",
-	Short: "Initialize and unseal Vault",
-	Long: `This command initializes Vault and unseals it using the generated keys.
-It requires a running Vault instance in the specified namespace and saves the keys to the specified path.`,
-	Example: `vp vault init-unseal --path /path/to/save/keys --namespace vault`,
+	Short: "Initialize and unseal Vault or OpenBao",
+	Long: `This command initializes Vault or OpenBao and unseals it using the generated keys.
+It requires a running instance in the specified namespace and saves the keys to the specified path.
+The flavor is detected from pod labels unless --flavor is set.`,
+	Example: `  vpd vault init-unseal --path /path/to/save/keys --namespace vault
+  vpd openbao init-unseal --path /path/to/save/keys --namespace openbao --flavor openbao`,
 	Args:    cobra.NoArgs,
 	Aliases: []string{"iu"},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -72,29 +74,29 @@ func vaultInitUnseal(path, namespace string, keyShares, keyThreshold int) {
 		logger.Fatal("key threshold cannot be greater than key shares")
 	}
 
-	podNames := vault_utils.GetPods(namespace)
+	flavor, podNames := vault_utils.ResolveFlavor(parent_cmd.FlagFlavor, namespace)
 	if len(podNames) == 0 {
-		logger.Fatalf("no Vault pods found in namespace %s", namespace)
+		logger.Fatalf("no %s pods found in namespace %s", flavor.Name, namespace)
 	}
-	vaultKeys := vaultInit(podNames[0], path, namespace, keyShares, keyThreshold)
+	vaultKeys := vaultInit(podNames[0], path, namespace, flavor, keyShares, keyThreshold)
 
 	extractedValueKeys, threshold := vault_utils.ExtractVaultKeys(vaultKeys)
 
 	for _, podName := range podNames {
 		logger.Infof("unsealing pod %s", podName)
-		vault_utils.UnsealPod(podName, namespace, extractedValueKeys, threshold)
+		vault_utils.UnsealPod(podName, namespace, flavor, extractedValueKeys, threshold)
 	}
 
-	logger.Infof("vault initialization and unsealing completed successfully. Keys saved to %s/vault_keys.json\n", path)
+	logger.Infof("%s initialization and unsealing completed successfully. Keys saved to %s/vault_keys.json\n", flavor.Name, path)
 }
 
-func vaultInit(pod, path, namespace string, keyShares, keyThreshold int) string {
-	logger.Infof("executing vault init on pod %s in namespace %s\n", pod, namespace)
-	cmd := exec.Command("kubectl", "exec", pod, "-n", namespace, "--", "vault", "operator", "init", "-format=json", "-key-shares", fmt.Sprintf("%d", keyShares), "-key-threshold", fmt.Sprintf("%d", keyThreshold))
+func vaultInit(pod, path, namespace string, flavor vault_utils.Flavor, keyShares, keyThreshold int) string {
+	logger.Infof("executing %s operator init on pod %s in namespace %s\n", flavor.Binary, pod, namespace)
+	cmd := exec.Command("kubectl", "exec", pod, "-n", namespace, "--", flavor.Binary, "operator", "init", "-format=json", "-key-shares", fmt.Sprintf("%d", keyShares), "-key-threshold", fmt.Sprintf("%d", keyThreshold))
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.Fatalf("error executing vault init command: %s\n", string(output))
+		logger.Fatalf("error executing %s operator init: %s\n", flavor.Binary, string(output))
 	}
 
 	err = os.WriteFile(filepath.Join(path, "vault_keys.json"), output, 0644)

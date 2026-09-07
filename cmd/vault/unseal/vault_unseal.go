@@ -17,12 +17,14 @@ var flagPod string
 
 var Cmd = &cobra.Command{
 	Use:   "unseal",
-	Short: "Unseal Vault pods using keys from a file or 1Password",
-	Long: `This command unseals Vault pods using unseal keys from a JSON file or a 1Password secret reference.
-Useful when Vault pods have restarted and need to be unsealed without re-initializing.`,
+	Short: "Unseal Vault or OpenBao pods using keys from a file or 1Password",
+	Long: `This command unseals Vault or OpenBao pods using unseal keys from a JSON file or a 1Password secret reference.
+Useful when pods have restarted and need to be unsealed without re-initializing.
+The flavor is detected from pod labels unless --flavor is set.`,
 	Example: `  vpd vault unseal --file /path/to/vault_keys.json --namespace vault
   vpd vault unseal --op-secret "op://vault/keys/vault_keys" --namespace vault
-  vpd vault unseal --file /path/to/vault_keys.json --namespace vault --pod vault-0`,
+  vpd vault unseal --file /path/to/vault_keys.json --namespace vault --pod vault-0
+  vpd openbao unseal --file /path/to/vault_keys.json --namespace openbao --flavor openbao`,
 	Args:    cobra.NoArgs,
 	Aliases: []string{"us"},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -79,22 +81,19 @@ func vaultUnseal() {
 
 	keys, threshold := vault_utils.ExtractVaultKeys(jsonData)
 
-	var podNames []string
+	flavor, podNames := vault_utils.ResolveFlavor(parent_cmd.FlagFlavor, flagNamespace)
 	if flagPod != "" {
 		podNames = []string{flagPod}
-	} else {
-		podNames = vault_utils.GetPods(flagNamespace)
-		if len(podNames) == 0 {
-			logger.Fatalf("no Vault pods found in namespace %s", flagNamespace)
-		}
+	} else if len(podNames) == 0 {
+		logger.Fatalf("no %s pods found in namespace %s", flavor.Name, flagNamespace)
 	}
 
 	for _, podName := range podNames {
 		logger.Infof("unsealing pod %s", podName)
-		vault_utils.UnsealPod(podName, flagNamespace, keys, threshold)
+		vault_utils.UnsealPod(podName, flagNamespace, flavor, keys, threshold)
 	}
 
-	logger.Info("vault unsealing completed successfully")
+	logger.Infof("%s unsealing completed successfully", flavor.Name)
 }
 
 func loadKeysFromFile(path string) string {

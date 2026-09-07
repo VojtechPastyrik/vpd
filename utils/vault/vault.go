@@ -12,9 +12,42 @@ import (
 	"github.com/VojtechPastyrik/vpd/pkg/logger"
 )
 
-func GetPods(namespace string) []string {
+type Flavor struct {
+	Name     string
+	PodLabel string
+	Binary   string
+}
+
+var (
+	FlavorVault   = Flavor{Name: "vault", PodLabel: "app.kubernetes.io/name=vault,component=server", Binary: "vault"}
+	FlavorOpenBao = Flavor{Name: "openbao", PodLabel: "app.kubernetes.io/name=openbao,component=server", Binary: "bao"}
+)
+
+var flavors = []Flavor{FlavorVault, FlavorOpenBao}
+
+// ResolveFlavor picks the flavor named by name and lists its server pods.
+// With "auto" it returns the first flavor that has pods in the namespace.
+func ResolveFlavor(name, namespace string) (Flavor, []string) {
+	if name == "auto" {
+		for _, f := range flavors {
+			if pods := GetPods(namespace, f); len(pods) > 0 {
+				return f, pods
+			}
+		}
+		logger.Fatalf("no Vault or OpenBao pods found in namespace %s", namespace)
+	}
+	for _, f := range flavors {
+		if f.Name == name {
+			return f, GetPods(namespace, f)
+		}
+	}
+	logger.Fatalf("unknown flavor %q (expected auto, vault or openbao)", name)
+	return Flavor{}, nil
+}
+
+func GetPods(namespace string, flavor Flavor) []string {
 	cmd := exec.Command("kubectl", "get", "pods", "-n", namespace,
-		"-l", "app.kubernetes.io/name=vault,component=server",
+		"-l", flavor.PodLabel,
 		"-o", "jsonpath={.items[*].metadata.name}")
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
@@ -67,22 +100,22 @@ func ParseVaultKeysText(text string) ([]string, error) {
 	return keys, nil
 }
 
-func UnsealPod(podName, namespace string, vaultKeys []string, threshold int) {
+func UnsealPod(podName, namespace string, flavor Flavor, vaultKeys []string, threshold int) {
 	for i, key := range vaultKeys {
 		if i >= threshold {
 			break
 		}
-		unsealWithRetry(podName, namespace, key)
+		unsealWithRetry(podName, namespace, flavor, key)
 	}
 	WaitForPodReady(podName, namespace)
 }
 
-func unsealWithRetry(podName, namespace, key string) {
+func unsealWithRetry(podName, namespace string, flavor Flavor, key string) {
 	const maxRetries = 6
 	const retryInterval = 5 * time.Second
 
 	for attempt := range maxRetries {
-		cmd := exec.Command("kubectl", "exec", podName, "-n", namespace, "--", "vault", "operator", "unseal", key)
+		cmd := exec.Command("kubectl", "exec", podName, "-n", namespace, "--", flavor.Binary, "operator", "unseal", key)
 		cmd.Env = os.Environ()
 		output, err := cmd.CombinedOutput()
 		if err == nil {
